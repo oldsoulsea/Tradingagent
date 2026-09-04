@@ -32,9 +32,10 @@ All of the following must hold to open a new CSP:
 3. **Strike / delta**: ~0.25 delta out-of-the-money put (0.20-0.30 acceptable
    if 0.25 isn't available on the chain).
 4. **Setup signal** — at least one of:
-   - **Oversold**: price at or near the lower Bollinger Band (20-period, 2
-     standard deviations, daily chart) — at/below the band or within ~1-2%
-     of it.
+   - **Oversold**: price at or below the middle Bollinger Band (20-period
+     SMA, daily chart) — i.e. in the lower half of the band range. (Updated
+     2026-09-04: originally required price near/below the *lower* band;
+     relaxed to the middle band after review.)
    - **Breakout**: price breaking above a clearly defined prior
      resistance / consolidation range (a multi-week trading range or
      horizontal resistance level) — a bullish continuation setup, not a
