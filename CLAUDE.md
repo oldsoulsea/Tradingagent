@@ -39,6 +39,13 @@ cash-secured puts) — entry/exit criteria, position sizing, and the approved
 It does not override the safety rules above: every order it produces is
 still just a proposal until the user confirms that specific trade.
 
+## Ticker discovery
+
+`SCREENER.md` documents a saved Robinhood scan for finding new candidate
+tickers (quality companies, liquid options, elevated IV, no imminent
+earnings) — a discovery tool, separate from `STRATEGY.md`. It never adds a
+ticker to `WATCHLIST.md` or authorizes a trade on its own.
+
 ## Setup
 
 See `README.md` for how to connect and authenticate the MCP server.
