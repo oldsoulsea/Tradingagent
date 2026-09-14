@@ -1,8 +1,7 @@
+//@version=6
 // This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
 // © TradingAgent Setup Scanner
-
-//@version=6
 indicator("Setup Scanner", overlay=true, max_labels_count=500, max_lines_count=500)
 
 // ─── INPUTS ──────────────────────────────────────────────────────────────────
