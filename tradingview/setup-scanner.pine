@@ -232,17 +232,16 @@ if show_dashboard and barstate.islast
     bear_bg   = color.new(#FF1744, 80)
     neut_bg   = color.new(#666666, 80)
 
-    score_color(val, is_bullish) =>
-        is_bullish ? (val > 0 ? bull_bg : neut_bg) : (val > 0 ? bear_bg : neut_bg)
-
     table.cell(dash, 0, 0, "SETUP SCANNER", bgcolor=header_bg, text_color=header_fg, text_size=size.normal)
     table.cell(dash, 1, 0, "",               bgcolor=header_bg)
 
+    bull_sc_bg = bull_score > 0 ? bull_bg : neut_bg
     table.cell(dash, 0, 1, "Bull Score", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
-    table.cell(dash, 1, 1, str.tostring(bull_score) + " / 10", bgcolor=score_color(bull_score, true), text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, str.tostring(bull_score) + " / 10", bgcolor=bull_sc_bg, text_color=color.white, text_size=size.small)
 
+    bear_sc_bg = bear_score > 0 ? bear_bg : neut_bg
     table.cell(dash, 0, 2, "Bear Score", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
-    table.cell(dash, 1, 2, str.tostring(bear_score) + " / 10", bgcolor=score_color(bear_score, false), text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 2, str.tostring(bear_score) + " / 10", bgcolor=bear_sc_bg, text_color=color.white, text_size=size.small)
 
     table.cell(dash, 0, 3, "── Trend ──", bgcolor=header_bg, text_color=color.new(header_fg, 40), text_size=size.small)
     table.cell(dash, 1, 3, "", bgcolor=header_bg)
