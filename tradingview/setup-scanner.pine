@@ -1,0 +1,291 @@
+// This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0
+// https://mozilla.org/MPL/2.0/
+// © TradingAgent Setup Scanner
+
+//@version=6
+indicator("Setup Scanner", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// ─── INPUTS ──────────────────────────────────────────────────────────────────
+
+grp_trend = "Trend Settings"
+ema_fast_len   = input.int(9,   "Fast EMA",        minval=2, group=grp_trend)
+ema_mid_len    = input.int(21,  "Mid EMA",         minval=2, group=grp_trend)
+ema_slow_len   = input.int(50,  "Slow EMA",        minval=2, group=grp_trend)
+ema_anchor_len = input.int(200, "Anchor EMA",      minval=2, group=grp_trend)
+adx_len        = input.int(14,  "ADX Length",       minval=2, group=grp_trend)
+adx_thresh     = input.int(20,  "ADX Trend Threshold", minval=5, group=grp_trend)
+
+grp_mom = "Momentum Settings"
+rsi_len        = input.int(14,  "RSI Length",       minval=2, group=grp_mom)
+rsi_ob         = input.int(70,  "RSI Overbought",   minval=50, group=grp_mom)
+rsi_os         = input.int(30,  "RSI Oversold",     maxval=50, group=grp_mom)
+macd_fast      = input.int(12,  "MACD Fast",        minval=2, group=grp_mom)
+macd_slow      = input.int(26,  "MACD Slow",        minval=2, group=grp_mom)
+macd_sig       = input.int(9,   "MACD Signal",      minval=2, group=grp_mom)
+stoch_k        = input.int(14,  "Stochastic K",     minval=2, group=grp_mom)
+stoch_d        = input.int(3,   "Stochastic D",     minval=2, group=grp_mom)
+stoch_smooth   = input.int(3,   "Stochastic Smooth", minval=1, group=grp_mom)
+
+grp_vol = "Volume Settings"
+vol_ma_len     = input.int(20,  "Volume MA Length",  minval=2, group=grp_vol)
+vol_spike_mult = input.float(1.5, "Volume Spike Multiplier", minval=1.0, step=0.1, group=grp_vol)
+
+grp_display = "Display"
+show_emas      = input.bool(true,  "Show EMAs",          group=grp_display)
+show_signals   = input.bool(true,  "Show Signal Arrows",  group=grp_display)
+show_dashboard = input.bool(true,  "Show Dashboard",      group=grp_display)
+min_score_bull = input.int(5,  "Min Bullish Score for Signal", minval=1, maxval=10, group=grp_display)
+min_score_bear = input.int(5,  "Min Bearish Score for Signal", minval=1, maxval=10, group=grp_display)
+
+// ─── TREND CALCULATIONS ─────────────────────────────────────────────────────
+
+ema_fast   = ta.ema(close, ema_fast_len)
+ema_mid    = ta.ema(close, ema_mid_len)
+ema_slow   = ta.ema(close, ema_slow_len)
+ema_anchor = ta.ema(close, ema_anchor_len)
+
+ema_bull_stack = ema_fast > ema_mid and ema_mid > ema_slow and ema_slow > ema_anchor
+ema_bear_stack = ema_fast < ema_mid and ema_mid < ema_slow and ema_slow < ema_anchor
+
+price_above_fast = close > ema_fast
+price_above_mid  = close > ema_mid
+price_above_slow = close > ema_slow
+price_above_anchor = close > ema_anchor
+
+// ADX
+[di_plus, di_minus, adx_val] = ta.dmi(adx_len, adx_len)
+strong_trend = adx_val > adx_thresh
+
+// ─── MOMENTUM CALCULATIONS ──────────────────────────────────────────────────
+
+rsi_val = ta.rsi(close, rsi_len)
+rsi_bullish = rsi_val > 50 and rsi_val < rsi_ob
+rsi_bearish = rsi_val < 50 and rsi_val > rsi_os
+rsi_oversold = rsi_val <= rsi_os
+rsi_overbought = rsi_val >= rsi_ob
+
+[macd_line, signal_line, hist_line] = ta.macd(close, macd_fast, macd_slow, macd_sig)
+macd_bull_cross = ta.crossover(macd_line, signal_line)
+macd_bear_cross = ta.crossunder(macd_line, signal_line)
+macd_bullish = macd_line > signal_line
+macd_bearish = macd_line < signal_line
+macd_hist_rising = hist_line > hist_line[1]
+macd_hist_falling = hist_line < hist_line[1]
+
+stoch_k_val = ta.sma(ta.stoch(close, high, low, stoch_k), stoch_smooth)
+stoch_d_val = ta.sma(stoch_k_val, stoch_d)
+stoch_bullish = stoch_k_val > stoch_d_val and stoch_k_val < 80
+stoch_bearish = stoch_k_val < stoch_d_val and stoch_k_val > 20
+stoch_oversold = stoch_k_val <= 20
+stoch_overbought = stoch_k_val >= 80
+
+// ─── VOLUME CALCULATIONS ────────────────────────────────────────────────────
+
+vol_ma = ta.sma(volume, vol_ma_len)
+vol_spike = volume > vol_ma * vol_spike_mult
+vol_above_avg = volume > vol_ma
+vol_rising = volume > volume[1]
+
+// ─── CANDLESTICK PATTERNS ───────────────────────────────────────────────────
+
+body = math.abs(close - open)
+upper_wick = high - math.max(close, open)
+lower_wick = math.min(close, open) - low
+candle_range = high - low
+body_pct = candle_range > 0 ? body / candle_range : 0
+
+is_green = close > open
+is_red = close < open
+
+bull_engulfing = is_red[1] and is_green and open <= close[1] and close >= open[1] and body > body[1]
+bear_engulfing = is_green[1] and is_red and open >= close[1] and close <= open[1] and body > body[1]
+
+hammer = lower_wick > body * 2 and upper_wick < body * 0.5 and candle_range > 0
+inv_hammer = upper_wick > body * 2 and lower_wick < body * 0.5 and candle_range > 0
+
+doji = body_pct < 0.1 and candle_range > 0
+
+morning_star = is_red[2] and body[2] > candle_range[2] * 0.5 and body_pct[1] < 0.3 and is_green and close > (open[2] + close[2]) / 2
+evening_star = is_green[2] and body[2] > candle_range[2] * 0.5 and body_pct[1] < 0.3 and is_red and close < (open[2] + close[2]) / 2
+
+candle_bull = bull_engulfing or (hammer and is_green) or morning_star
+candle_bear = bear_engulfing or (inv_hammer and is_red) or evening_star
+
+// ─── SUPPORT / RESISTANCE (Pivot-based) ─────────────────────────────────────
+
+pivot_len = 10
+pivot_high = ta.pivothigh(high, pivot_len, pivot_len)
+pivot_low  = ta.pivotlow(low, pivot_len, pivot_len)
+
+var float resistance = na
+var float support = na
+
+if not na(pivot_high)
+    resistance := pivot_high
+if not na(pivot_low)
+    support := pivot_low
+
+near_support    = not na(support) and low <= support * 1.01 and close > support
+near_resistance = not na(resistance) and high >= resistance * 0.99 and close < resistance
+breakout_above  = not na(resistance) and close > resistance and close[1] <= resistance
+breakdown_below = not na(support) and close < support and close[1] >= support
+
+// ─── SCORING ENGINE ─────────────────────────────────────────────────────────
+
+var int bull_score = 0
+var int bear_score = 0
+
+bull_score := 0
+bear_score := 0
+
+// Trend (max 3 points each)
+if ema_bull_stack
+    bull_score += 2
+if price_above_anchor
+    bull_score += 1
+if ema_bear_stack
+    bear_score += 2
+if not price_above_anchor
+    bear_score += 1
+if strong_trend and di_plus > di_minus
+    bull_score += 1
+if strong_trend and di_minus > di_plus
+    bear_score += 1
+
+// Momentum (max 4 points each)
+if rsi_bullish
+    bull_score += 1
+if rsi_oversold
+    bull_score += 1
+if rsi_bearish
+    bear_score += 1
+if rsi_overbought
+    bear_score += 1
+if macd_bullish
+    bull_score += 1
+if macd_bull_cross
+    bull_score += 1
+if macd_bearish
+    bear_score += 1
+if macd_bear_cross
+    bear_score += 1
+if stoch_bullish
+    bull_score += 1
+if stoch_bearish
+    bear_score += 1
+
+// Volume (max 1 point each)
+if vol_spike and is_green
+    bull_score += 1
+if vol_spike and is_red
+    bear_score += 1
+
+// Candlestick patterns (max 2 points each)
+if candle_bull
+    bull_score += 2
+if candle_bear
+    bear_score += 2
+
+// Support / Resistance context (max 1 point each)
+if near_support
+    bull_score += 1
+if breakout_above
+    bull_score += 1
+if near_resistance
+    bear_score += 1
+if breakdown_below
+    bear_score += 1
+
+// ─── SIGNAL OUTPUT ──────────────────────────────────────────────────────────
+
+bull_signal = bull_score >= min_score_bull and bull_score > bear_score
+bear_signal = bear_score >= min_score_bear and bear_score > bull_score
+
+// ─── PLOTS ──────────────────────────────────────────────────────────────────
+
+plot(show_emas ? ema_fast   : na, "Fast EMA",   color=color.new(#2962FF, 0), linewidth=1)
+plot(show_emas ? ema_mid    : na, "Mid EMA",    color=color.new(#FF6D00, 0), linewidth=1)
+plot(show_emas ? ema_slow   : na, "Slow EMA",   color=color.new(#E91E63, 0), linewidth=2)
+plot(show_emas ? ema_anchor : na, "Anchor EMA", color=color.new(#9C27B0, 30), linewidth=3)
+
+plotshape(show_signals and bull_signal ? low : na, title="Bullish Setup", style=shape.triangleup,
+     location=location.belowbar, color=color.new(#00C853, 0), size=size.small, text="BULL")
+plotshape(show_signals and bear_signal ? high : na, title="Bearish Setup", style=shape.triangledown,
+     location=location.abovebar, color=color.new(#FF1744, 0), size=size.small, text="BEAR")
+
+// S/R lines
+plot(support, "Support", color=color.new(#00C853, 50), linewidth=1, style=plot.style_circles)
+plot(resistance, "Resistance", color=color.new(#FF1744, 50), linewidth=1, style=plot.style_circles)
+
+// Background tint on strong signals
+bgcolor(bull_score >= min_score_bull + 2 and bull_score > bear_score ? color.new(#00C853, 92) : na)
+bgcolor(bear_score >= min_score_bear + 2 and bear_score > bull_score ? color.new(#FF1744, 92) : na)
+
+// ─── DASHBOARD TABLE ────────────────────────────────────────────────────────
+
+if show_dashboard and barstate.islast
+    var table dash = table.new(position.top_right, 2, 12, bgcolor=color.new(#1E1E1E, 10), border_width=1, border_color=color.new(#333333, 0))
+
+    header_bg = color.new(#333333, 0)
+    header_fg = color.white
+    bull_bg   = color.new(#00C853, 80)
+    bear_bg   = color.new(#FF1744, 80)
+    neut_bg   = color.new(#666666, 80)
+
+    score_color(val, is_bullish) =>
+        is_bullish ? (val > 0 ? bull_bg : neut_bg) : (val > 0 ? bear_bg : neut_bg)
+
+    table.cell(dash, 0, 0, "SETUP SCANNER", bgcolor=header_bg, text_color=header_fg, text_size=size.normal)
+    table.cell(dash, 1, 0, "",               bgcolor=header_bg)
+
+    table.cell(dash, 0, 1, "Bull Score", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 1, str.tostring(bull_score) + " / 10", bgcolor=score_color(bull_score, true), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 2, "Bear Score", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 2, str.tostring(bear_score) + " / 10", bgcolor=score_color(bear_score, false), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 3, "── Trend ──", bgcolor=header_bg, text_color=color.new(header_fg, 40), text_size=size.small)
+    table.cell(dash, 1, 3, "", bgcolor=header_bg)
+
+    ema_status = ema_bull_stack ? "✓ Bullish Stack" : ema_bear_stack ? "✗ Bearish Stack" : "— Mixed"
+    ema_bg = ema_bull_stack ? bull_bg : ema_bear_stack ? bear_bg : neut_bg
+    table.cell(dash, 0, 4, "EMAs", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 4, ema_status, bgcolor=ema_bg, text_color=color.white, text_size=size.small)
+
+    adx_status = strong_trend ? (di_plus > di_minus ? "✓ Strong Up" : "✗ Strong Down") : "— Weak"
+    adx_bg = strong_trend ? (di_plus > di_minus ? bull_bg : bear_bg) : neut_bg
+    table.cell(dash, 0, 5, "ADX (" + str.tostring(adx_val, "#.0") + ")", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 5, adx_status, bgcolor=adx_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 6, "── Momentum ──", bgcolor=header_bg, text_color=color.new(header_fg, 40), text_size=size.small)
+    table.cell(dash, 1, 6, "", bgcolor=header_bg)
+
+    rsi_status = rsi_overbought ? "✗ Overbought" : rsi_oversold ? "✓ Oversold" : rsi_bullish ? "✓ Bullish" : rsi_bearish ? "✗ Bearish" : "— Neutral"
+    rsi_bg = rsi_bullish or rsi_oversold ? bull_bg : rsi_bearish or rsi_overbought ? bear_bg : neut_bg
+    table.cell(dash, 0, 7, "RSI (" + str.tostring(rsi_val, "#.0") + ")", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 7, rsi_status, bgcolor=rsi_bg, text_color=color.white, text_size=size.small)
+
+    macd_status = macd_bull_cross ? "✓ Bull Cross" : macd_bear_cross ? "✗ Bear Cross" : macd_bullish ? "✓ Bullish" : "✗ Bearish"
+    macd_bg = macd_bullish ? bull_bg : bear_bg
+    table.cell(dash, 0, 8, "MACD", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 8, macd_status, bgcolor=macd_bg, text_color=color.white, text_size=size.small)
+
+    stoch_status = stoch_overbought ? "✗ Overbought" : stoch_oversold ? "✓ Oversold" : stoch_bullish ? "✓ Bullish" : "✗ Bearish"
+    stoch_bg = stoch_bullish or stoch_oversold ? bull_bg : bear_bg
+    table.cell(dash, 0, 9, "Stoch (" + str.tostring(stoch_k_val, "#.0") + ")", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 9, stoch_status, bgcolor=stoch_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 10, "── Volume ──", bgcolor=header_bg, text_color=color.new(header_fg, 40), text_size=size.small)
+    table.cell(dash, 1, 10, "", bgcolor=header_bg)
+
+    vol_status = vol_spike ? "⚡ Spike" : vol_above_avg ? "✓ Above Avg" : "— Below Avg"
+    vol_bg = vol_spike ? (is_green ? bull_bg : bear_bg) : vol_above_avg ? neut_bg : neut_bg
+    table.cell(dash, 0, 11, "Volume", bgcolor=header_bg, text_color=header_fg, text_size=size.small)
+    table.cell(dash, 1, 11, vol_status, bgcolor=vol_bg, text_color=color.white, text_size=size.small)
+
+// ─── ALERTS ─────────────────────────────────────────────────────────────────
+
+alertcondition(bull_signal, title="Bullish Setup", message="Bullish setup detected on {{ticker}} ({{interval}}). Score: " + str.tostring(bull_score) + "/10")
+alertcondition(bear_signal, title="Bearish Setup", message="Bearish setup detected on {{ticker}} ({{interval}}). Score: " + str.tostring(bear_score) + "/10")
+alertcondition(bull_signal and vol_spike, title="High-Volume Bullish", message="High-volume bullish setup on {{ticker}} ({{interval}}). Score: " + str.tostring(bull_score) + "/10")
+alertcondition(bear_signal and vol_spike, title="High-Volume Bearish", message="High-volume bearish setup on {{ticker}} ({{interval}}). Score: " + str.tostring(bear_score) + "/10")
