@@ -283,7 +283,7 @@ if show_dashboard and barstate.islast
 
 // ─── ALERTS ─────────────────────────────────────────────────────────────────
 
-alertcondition(bull_signal, title="Bullish Setup", message="Bullish setup detected on {{ticker}} ({{interval}}). Score: " + str.tostring(bull_score) + "/10")
-alertcondition(bear_signal, title="Bearish Setup", message="Bearish setup detected on {{ticker}} ({{interval}}). Score: " + str.tostring(bear_score) + "/10")
-alertcondition(bull_signal and vol_spike, title="High-Volume Bullish", message="High-volume bullish setup on {{ticker}} ({{interval}}). Score: " + str.tostring(bull_score) + "/10")
-alertcondition(bear_signal and vol_spike, title="High-Volume Bearish", message="High-volume bearish setup on {{ticker}} ({{interval}}). Score: " + str.tostring(bear_score) + "/10")
+alertcondition(bull_signal, title="Bullish Setup", message="Bullish setup detected on {{ticker}} ({{interval}}).")
+alertcondition(bear_signal, title="Bearish Setup", message="Bearish setup detected on {{ticker}} ({{interval}}).")
+alertcondition(bull_signal and vol_spike, title="High-Volume Bullish", message="High-volume bullish setup on {{ticker}} ({{interval}}).")
+alertcondition(bear_signal and vol_spike, title="High-Volume Bearish", message="High-volume bearish setup on {{ticker}} ({{interval}}).")
