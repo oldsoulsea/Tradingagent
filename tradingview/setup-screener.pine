@@ -1,0 +1,263 @@
+//@version=6
+// Setup Screener — scans up to 20 symbols using the same scoring engine
+// as setup-scanner.pine and ranks them by bull score.
+indicator("Setup Screener", overlay=true)
+
+// ─── WATCHLIST INPUTS ───────────────────────────────────────────────────────
+
+grp1 = "Watchlist 1–10"
+sym01 = input.symbol("AAPL",  "Symbol 1",  group=grp1)
+sym02 = input.symbol("MSFT",  "Symbol 2",  group=grp1)
+sym03 = input.symbol("GOOGL", "Symbol 3",  group=grp1)
+sym04 = input.symbol("AMZN",  "Symbol 4",  group=grp1)
+sym05 = input.symbol("NVDA",  "Symbol 5",  group=grp1)
+sym06 = input.symbol("META",  "Symbol 6",  group=grp1)
+sym07 = input.symbol("TSLA",  "Symbol 7",  group=grp1)
+sym08 = input.symbol("AMD",   "Symbol 8",  group=grp1)
+sym09 = input.symbol("NFLX",  "Symbol 9",  group=grp1)
+sym10 = input.symbol("JPM",   "Symbol 10", group=grp1)
+
+grp2 = "Watchlist 11–20"
+sym11 = input.symbol("V",     "Symbol 11", group=grp2)
+sym12 = input.symbol("MA",    "Symbol 12", group=grp2)
+sym13 = input.symbol("DIS",   "Symbol 13", group=grp2)
+sym14 = input.symbol("BA",    "Symbol 14", group=grp2)
+sym15 = input.symbol("COST",  "Symbol 15", group=grp2)
+sym16 = input.symbol("CRM",   "Symbol 16", group=grp2)
+sym17 = input.symbol("PYPL",  "Symbol 17", group=grp2)
+sym18 = input.symbol("SQ",    "Symbol 18", group=grp2)
+sym19 = input.symbol("COIN",  "Symbol 19", group=grp2)
+sym20 = input.symbol("SOFI",  "Symbol 20", group=grp2)
+
+grp_d = "Display"
+min_score  = input.int(5, "Min Score to Highlight", minval=1, maxval=10, group=grp_d)
+do_sort    = input.bool(true, "Sort by Bull Score (Descending)", group=grp_d)
+
+// ─── UTILITY ────────────────────────────────────────────────────────────────
+
+get_ticker(sym) =>
+    p = str.pos(sym, ":")
+    na(p) ? sym : str.substring(sym, p + 1)
+
+// ─── SCORING FUNCTION ───────────────────────────────────────────────────────
+// Mirrors the scoring engine in setup-scanner.pine.
+// Returns [bull_score, bear_score] as floats for request.security().
+
+score_calc() =>
+    // Trend
+    ema_f = ta.ema(close, 9)
+    ema_m = ta.ema(close, 21)
+    ema_s = ta.ema(close, 50)
+    ema_a = ta.ema(close, 200)
+    ema_bull  = ema_f > ema_m and ema_m > ema_s and ema_s > ema_a
+    ema_bear  = ema_f < ema_m and ema_m < ema_s and ema_s < ema_a
+    above_anch = close > ema_a
+
+    [dp, dm, adx] = ta.dmi(14, 14)
+    str_trend = adx > 20
+
+    // Momentum
+    rsi = ta.rsi(close, 14)
+    [ml, sig_l, _hl] = ta.macd(close, 12, 26, 9)
+    sk = ta.sma(ta.stoch(close, high, low, 14), 3)
+    sd = ta.sma(sk, 3)
+
+    // Volume
+    vm = ta.sma(volume, 20)
+    vs = volume > vm * 1.5
+
+    // Candlestick patterns
+    bd = math.abs(close - open)
+    uw = high - math.max(close, open)
+    lw = math.min(close, open) - low
+    cr = high - low
+    bp = cr > 0 ? bd / cr : 0.0
+    ig = close > open
+    ir = close < open
+
+    bull_eng = ir[1] and ig and open <= close[1] and close >= open[1] and bd > bd[1]
+    bear_eng = ig[1] and ir and open >= close[1] and close <= open[1] and bd > bd[1]
+    ham      = lw > bd * 2 and uw < bd * 0.5 and cr > 0
+    inv_ham  = uw > bd * 2 and lw < bd * 0.5 and cr > 0
+    m_star   = ir[2] and bd[2] > cr[2] * 0.5 and bp[1] < 0.3 and ig and close > (open[2] + close[2]) / 2
+    e_star   = ig[2] and bd[2] > cr[2] * 0.5 and bp[1] < 0.3 and ir and close < (open[2] + close[2]) / 2
+
+    c_bull = bull_eng or (ham and ig) or m_star
+    c_bear = bear_eng or (inv_ham and ir) or e_star
+
+    // Support / Resistance (pivot-based)
+    ph  = ta.pivothigh(high, 10, 10)
+    pl  = ta.pivotlow(low, 10, 10)
+    res = ta.valuewhen(not na(ph), ph, 0)
+    sup = ta.valuewhen(not na(pl), pl, 0)
+
+    nr_sup = not na(sup) and low  <= sup * 1.01 and close > sup
+    nr_res = not na(res) and high >= res * 0.99 and close < res
+    brk_up = not na(res) and close > res and close[1] <= res
+    brk_dn = not na(sup) and close < sup and close[1] >= sup
+
+    // Composite scores (ternary sums — no mutable += needed)
+    bull = (ema_bull ? 2 : 0) + (above_anch ? 1 : 0) +
+         (str_trend and dp > dm ? 1 : 0) +
+         (rsi > 50 and rsi < 70 ? 1 : 0) + (rsi <= 30 ? 1 : 0) +
+         (ml > sig_l ? 1 : 0) + (ta.crossover(ml, sig_l) ? 1 : 0) +
+         (sk > sd and sk < 80 ? 1 : 0) +
+         (vs and ig ? 1 : 0) +
+         (c_bull ? 2 : 0) +
+         (nr_sup ? 1 : 0) + (brk_up ? 1 : 0)
+
+    bear = (ema_bear ? 2 : 0) + (not above_anch ? 1 : 0) +
+         (str_trend and dm > dp ? 1 : 0) +
+         (rsi < 50 and rsi > 30 ? 1 : 0) + (rsi >= 70 ? 1 : 0) +
+         (ml < sig_l ? 1 : 0) + (ta.crossunder(ml, sig_l) ? 1 : 0) +
+         (sk < sd and sk > 20 ? 1 : 0) +
+         (vs and ir ? 1 : 0) +
+         (c_bear ? 2 : 0) +
+         (nr_res ? 1 : 0) + (brk_dn ? 1 : 0)
+
+    [float(bull), float(bear)]
+
+// ─── REQUEST SCORES FOR EACH SYMBOL ─────────────────────────────────────────
+
+[b01, r01] = request.security(sym01, timeframe.period, score_calc())
+[b02, r02] = request.security(sym02, timeframe.period, score_calc())
+[b03, r03] = request.security(sym03, timeframe.period, score_calc())
+[b04, r04] = request.security(sym04, timeframe.period, score_calc())
+[b05, r05] = request.security(sym05, timeframe.period, score_calc())
+[b06, r06] = request.security(sym06, timeframe.period, score_calc())
+[b07, r07] = request.security(sym07, timeframe.period, score_calc())
+[b08, r08] = request.security(sym08, timeframe.period, score_calc())
+[b09, r09] = request.security(sym09, timeframe.period, score_calc())
+[b10, r10] = request.security(sym10, timeframe.period, score_calc())
+[b11, r11] = request.security(sym11, timeframe.period, score_calc())
+[b12, r12] = request.security(sym12, timeframe.period, score_calc())
+[b13, r13] = request.security(sym13, timeframe.period, score_calc())
+[b14, r14] = request.security(sym14, timeframe.period, score_calc())
+[b15, r15] = request.security(sym15, timeframe.period, score_calc())
+[b16, r16] = request.security(sym16, timeframe.period, score_calc())
+[b17, r17] = request.security(sym17, timeframe.period, score_calc())
+[b18, r18] = request.security(sym18, timeframe.period, score_calc())
+[b19, r19] = request.security(sym19, timeframe.period, score_calc())
+[b20, r20] = request.security(sym20, timeframe.period, score_calc())
+
+// ─── SORTED TABLE DISPLAY ───────────────────────────────────────────────────
+
+if barstate.islast
+    var sym_arr  = array.new<string>(20)
+    var bull_arr = array.new<float>(20)
+    var bear_arr = array.new<float>(20)
+
+    array.set(sym_arr,  0,  get_ticker(sym01))
+    array.set(sym_arr,  1,  get_ticker(sym02))
+    array.set(sym_arr,  2,  get_ticker(sym03))
+    array.set(sym_arr,  3,  get_ticker(sym04))
+    array.set(sym_arr,  4,  get_ticker(sym05))
+    array.set(sym_arr,  5,  get_ticker(sym06))
+    array.set(sym_arr,  6,  get_ticker(sym07))
+    array.set(sym_arr,  7,  get_ticker(sym08))
+    array.set(sym_arr,  8,  get_ticker(sym09))
+    array.set(sym_arr,  9,  get_ticker(sym10))
+    array.set(sym_arr,  10, get_ticker(sym11))
+    array.set(sym_arr,  11, get_ticker(sym12))
+    array.set(sym_arr,  12, get_ticker(sym13))
+    array.set(sym_arr,  13, get_ticker(sym14))
+    array.set(sym_arr,  14, get_ticker(sym15))
+    array.set(sym_arr,  15, get_ticker(sym16))
+    array.set(sym_arr,  16, get_ticker(sym17))
+    array.set(sym_arr,  17, get_ticker(sym18))
+    array.set(sym_arr,  18, get_ticker(sym19))
+    array.set(sym_arr,  19, get_ticker(sym20))
+
+    array.set(bull_arr, 0,  nz(b01))
+    array.set(bull_arr, 1,  nz(b02))
+    array.set(bull_arr, 2,  nz(b03))
+    array.set(bull_arr, 3,  nz(b04))
+    array.set(bull_arr, 4,  nz(b05))
+    array.set(bull_arr, 5,  nz(b06))
+    array.set(bull_arr, 6,  nz(b07))
+    array.set(bull_arr, 7,  nz(b08))
+    array.set(bull_arr, 8,  nz(b09))
+    array.set(bull_arr, 9,  nz(b10))
+    array.set(bull_arr, 10, nz(b11))
+    array.set(bull_arr, 11, nz(b12))
+    array.set(bull_arr, 12, nz(b13))
+    array.set(bull_arr, 13, nz(b14))
+    array.set(bull_arr, 14, nz(b15))
+    array.set(bull_arr, 15, nz(b16))
+    array.set(bull_arr, 16, nz(b17))
+    array.set(bull_arr, 17, nz(b18))
+    array.set(bull_arr, 18, nz(b19))
+    array.set(bull_arr, 19, nz(b20))
+
+    array.set(bear_arr, 0,  nz(r01))
+    array.set(bear_arr, 1,  nz(r02))
+    array.set(bear_arr, 2,  nz(r03))
+    array.set(bear_arr, 3,  nz(r04))
+    array.set(bear_arr, 4,  nz(r05))
+    array.set(bear_arr, 5,  nz(r06))
+    array.set(bear_arr, 6,  nz(r07))
+    array.set(bear_arr, 7,  nz(r08))
+    array.set(bear_arr, 8,  nz(r09))
+    array.set(bear_arr, 9,  nz(r10))
+    array.set(bear_arr, 10, nz(r11))
+    array.set(bear_arr, 11, nz(r12))
+    array.set(bear_arr, 12, nz(r13))
+    array.set(bear_arr, 13, nz(r14))
+    array.set(bear_arr, 14, nz(r15))
+    array.set(bear_arr, 15, nz(r16))
+    array.set(bear_arr, 16, nz(r17))
+    array.set(bear_arr, 17, nz(r18))
+    array.set(bear_arr, 18, nz(r19))
+    array.set(bear_arr, 19, nz(r20))
+
+    // Selection sort by bull score descending
+    if do_sort
+        for i = 0 to 19
+            max_i = i
+            for j = i + 1 to 19
+                if array.get(bull_arr, j) > array.get(bull_arr, max_i)
+                    max_i := j
+            if max_i != i
+                tmp_s = array.get(sym_arr,  i)
+                tmp_b = array.get(bull_arr, i)
+                tmp_r = array.get(bear_arr, i)
+                array.set(sym_arr,  i, array.get(sym_arr,  max_i))
+                array.set(bull_arr, i, array.get(bull_arr, max_i))
+                array.set(bear_arr, i, array.get(bear_arr, max_i))
+                array.set(sym_arr,  max_i, tmp_s)
+                array.set(bull_arr, max_i, tmp_b)
+                array.set(bear_arr, max_i, tmp_r)
+
+    // Draw table
+    var table t = table.new(position.top_right, 5, 21, bgcolor=color.new(#1E1E1E, 10), border_width=1, border_color=color.new(#333333, 0))
+
+    hdr_bg = color.new(#333333, 0)
+    hdr_fg = color.white
+    grn    = color.new(#00C853, 70)
+    red    = color.new(#FF1744, 70)
+    neut   = color.new(#666666, 80)
+
+    table.cell(t, 0, 0, "#",      bgcolor=hdr_bg, text_color=hdr_fg, text_size=size.small)
+    table.cell(t, 1, 0, "Symbol", bgcolor=hdr_bg, text_color=hdr_fg, text_size=size.small)
+    table.cell(t, 2, 0, "Bull",   bgcolor=hdr_bg, text_color=hdr_fg, text_size=size.small)
+    table.cell(t, 3, 0, "Bear",   bgcolor=hdr_bg, text_color=hdr_fg, text_size=size.small)
+    table.cell(t, 4, 0, "Signal", bgcolor=hdr_bg, text_color=hdr_fg, text_size=size.small)
+
+    for i = 0 to 19
+        row  = i + 1
+        s    = array.get(sym_arr,  i)
+        bs   = array.get(bull_arr, i)
+        br   = array.get(bear_arr, i)
+        is_bull = bs >= min_score and bs > br
+        is_bear = br >= min_score and br > bs
+
+        b_bg = bs >= min_score ? grn : neut
+        r_bg = br >= min_score ? red : neut
+        sig  = is_bull ? "BULL" : is_bear ? "BEAR" : "—"
+        s_bg = is_bull ? color.new(#00C853, 60) : is_bear ? color.new(#FF1744, 60) : neut
+
+        table.cell(t, 0, row, str.tostring(row),      bgcolor=hdr_bg,                      text_color=hdr_fg,     text_size=size.small)
+        table.cell(t, 1, row, s,                       bgcolor=color.new(#1E1E1E, 10),      text_color=color.white, text_size=size.small)
+        table.cell(t, 2, row, str.tostring(bs, "#"),   bgcolor=b_bg,                        text_color=color.white, text_size=size.small)
+        table.cell(t, 3, row, str.tostring(br, "#"),   bgcolor=r_bg,                        text_color=color.white, text_size=size.small)
+        table.cell(t, 4, row, sig,                     bgcolor=s_bg,                        text_color=color.white, text_size=size.small)
