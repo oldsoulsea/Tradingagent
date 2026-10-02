@@ -123,7 +123,7 @@ place trades.
 
 | Filter | Condition | Purpose |
 |---|---|---|
-| Revenue growth (`fundamental.quarterlyRevenueGrowth`) | > 5% YoY | "growing revenue" |
+| Revenue growth (`fundamental.quarterlyRevenueGrowth`) | > 10% YoY (tightened from 5%) | "growing revenue" |
 | Annual EPS growth (`fundamental.annualEpsGrowth`) | > 0% | EPS growing year-over-year |
 | Quarterly EPS growth (`fundamental.quarterlyEpsGrowth`) | > 0% | EPS also growing in the most recent quarter |
 
@@ -143,9 +143,11 @@ data error — but it's not "steady growth" in the intended sense either.
 Sanity-check any triple/quadruple-digit growth number against the
 company's actual financials before treating it as a real signal.
 
-## Results snapshot (2026-10-02, 38 matches)
+## Results snapshot (2026-10-02, 29 matches after tightening revenue growth to >10%)
 
-Top names by IV Rank: PBR, DINO, GEN, PSX, MPC, ITUB, CBOE, NU, VLO, NLY,
-MPLX, NYT, BSX, TMO, BMY, FTNT. Heavy energy/refiner representation (PBR,
-DINO, PSX, MPC, VLO) again — same sector-concentration caveat as the first
-screener applies.
+Top names by IV Rank: PBR, DINO, PSX, CBOE, MPC, NLY, VLO, NU, MPLX, NYT,
+TMO, FTNT, ITUB. Tightening from >5% to >10% dropped the marginal-growth
+names (SAP, ACN, TMUS, KO, DECK, BMY, BSX, CMG, GEN, KMI) but didn't touch
+the energy/refiner concentration (PBR, DINO, PSX, MPC, VLO) — same
+sector-concentration caveat as the first screener applies. PBR hit IV Rank
+= 100% (pegged at its own 52-week high) in this run.
