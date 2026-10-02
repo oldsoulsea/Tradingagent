@@ -29,7 +29,7 @@ require the user to explicitly say so.
 | Return on equity | > 10% | capital-efficiency quality bar |
 | Avg options volume (30d) | > 5,000/day | liquid enough to trade weeklies with reasonable spreads |
 | Open interest | > 10,000 | liquidity depth |
-| Implied volatility (ATM, 30-day) | > 35% | "high IV" gate |
+| IV Rank (`ivRank`, 52-week) | > 50% | real "high IV rank" gate — see below |
 | Earnings date | > 14 days out (fixed date, see below) | excludes imminent-earnings names |
 
 Columns also surfaced (not filtered on): Sector, Historical volatility, P/E,
@@ -50,27 +50,42 @@ bumping.** Current cutoff value: **2026-10-16** (set 2026-10-02, intended
 as "14 days out" at that time). Ask the agent to refresh it to
 today + 14 days whenever you run this scan after a gap.
 
-## Known limitation: no true IV Rank
+## IV Rank (resolved — this now uses the real metric)
 
-Robinhood's scanner exposes raw current implied volatility
-(`atmIv30Day`) but has **no historical IV time series**, so there is no way
-to compute a real IV Rank/Percentile (where current IV sits in its own
-52-week range) through this API. The IV filter above screens on the *raw
-level* instead, and the results table includes an **IV/HV ratio** (implied
-vs. historical/realized volatility) as a rough proxy for "richly priced"
-options — not a substitute for true rank.
+Earlier versions of this screener assumed Robinhood's scanner had no
+historical IV time series and used raw IV level + an IV/HV ratio as a
+proxy. That assumption was wrong: `get_scanner_datapoints` (not available
+when this screener was first built) exposes an **`ivRank`** field —
+`(iv − iv52WeeksLow) / (iv52WeeksHigh − iv52WeeksLow)`, exactly the
+industry-standard definition — as an expression filter. The scan now
+filters on `ivRank > 0.5` (50th percentile of the stock's own 52-week IV
+range) instead of raw IV level.
 
-If you want the real IV Rank number for a specific candidate before
-trading it, check it externally (the options-chain view in the Robinhood
-app, or a service like Market Chameleon, Barchart, or tastytrade) — this
-agent can't compute it.
+This materially changes the result set: raw-IV screening was heavily
+skewed toward semiconductor/AI-hardware names simply because that sector
+had elevated *absolute* volatility; `ivRank` surfaces different names
+entirely (energy, mortgage REITs, fintech, media, healthcare have shown up
+in recent runs) because a stock can have low absolute IV but still sit
+high in its *own* range, or vice versa.
+
+**Caveat on a similarly-named field**: `atmIv30DayPosInRange` looks like it
+should be "30-day IV rank" but is NOT — testing showed it pegged at 1 for
+almost every result, meaning it measures where 30-day IV sits in the
+*term structure across expirations* (30d/60d/90d/.../720d), not a
+historical percentile. Don't use it for IV rank; use bare `ivRank`.
+
+Implied volatility and historical volatility are still shown as columns
+for context (IV/HV ratio can be computed from them), just no longer the
+filter.
 
 ## Other things to sanity-check on results
 
 - **Sector concentration**: the scan doesn't cap how many results come from
-  one sector. Recent runs skewed heavily toward semiconductor/AI-hardware
-  names (SMTC, ALAB, SNDK, MRVL, SMCI, STX, WDC, TER, etc.) — correlated
-  moves can hit several "different" positions at once.
+  one sector — check the current run rather than assuming. The old
+  raw-IV filter skewed heavily toward semiconductors; the `ivRank` filter's
+  2026-10-02 run skewed toward energy (PBR, DINO, PSX, MPC, VLO, SU, DVN).
+  Either way, correlated moves can hit several "different" positions at
+  once.
 - **Sector column is unreliable**: it currently returns numeric codes (e.g.
   "311") instead of sector names — an API quirk, not decoded here.
 - Passing this screen is not the same as passing `STRATEGY.md`'s entry
@@ -81,6 +96,9 @@ agent can't compute it.
 
 ## Editing the scan
 
-Ask the agent to adjust filters (e.g. raise/lower the IV bar, add a sector
-exclusion, change the earnings buffer) — it can call `update_scan_filters`
-on the scan ID above rather than creating a new one.
+Ask the agent to adjust filters (e.g. raise/lower the IV Rank bar, add a
+sector exclusion, change the earnings buffer). Note: the scan now has an
+**expression filter** (`ivRank`) — Robinhood's `update_scan_filters` tool
+rejects expression filters, so changes go through `create_scan` with this
+scan's `scan_id` (appends a new configuration version; history is kept),
+not `update_scan_filters`.
