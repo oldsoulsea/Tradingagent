@@ -102,3 +102,50 @@ sector exclusion, change the earnings buffer). Note: the scan now has an
 rejects expression filters, so changes go through `create_scan` with this
 scan's `scan_id` (appends a new configuration version; history is kept),
 not `update_scan_filters`.
+
+---
+
+# Quality Growth + High IV Rank Screener
+
+A second, separate saved scan — same base filters as above (quality,
+liquid options, IV Rank > 50%, no imminent earnings) plus a growth overlay:
+companies with growing revenue and positive EPS growth, not just "quality"
+by margin/ROE alone.
+
+**Scan ID**: `e3fdb1bb-329f-455b-bf96-9288b42b06c7`
+**Title in Robinhood/Legend**: "Quality Growth + High IV Rank Screener"
+
+This scan is independent of the first one — editing one doesn't affect the
+other. Same rules apply: discovery only, doesn't touch `WATCHLIST.md` or
+place trades.
+
+## Added filters (on top of everything in the first screener)
+
+| Filter | Condition | Purpose |
+|---|---|---|
+| Revenue growth (`fundamental.quarterlyRevenueGrowth`) | > 5% YoY | "growing revenue" |
+| Annual EPS growth (`fundamental.annualEpsGrowth`) | > 0% | EPS growing year-over-year |
+| Quarterly EPS growth (`fundamental.quarterlyEpsGrowth`) | > 0% | EPS also growing in the most recent quarter |
+
+**On "steady"**: there's no multi-quarter trend/consistency datapoint
+available through this API — no way to check "grew in each of the last 4
+quarters," only point-in-time snapshots. Requiring *both* the annual and
+most-recent-quarter EPS growth figures to be positive is the closest
+approximation of "steady" achievable here: it rules out a name that grew
+for the year but is currently declining (or vice versa), but it's not a
+real trend check. Treat it as a floor, not proof of consistency.
+
+**Data-quality flag — extreme growth numbers from a small base**: some
+matches show absurd-looking growth (e.g. NLY's quarterly EPS growth showed
+3,433% and revenue growth 706% in the 2026-10-02 run). This is a real
+artifact of growth math on a tiny or near-zero prior-year base, not a
+data error — but it's not "steady growth" in the intended sense either.
+Sanity-check any triple/quadruple-digit growth number against the
+company's actual financials before treating it as a real signal.
+
+## Results snapshot (2026-10-02, 38 matches)
+
+Top names by IV Rank: PBR, DINO, GEN, PSX, MPC, ITUB, CBOE, NU, VLO, NLY,
+MPLX, NYT, BSX, TMO, BMY, FTNT. Heavy energy/refiner representation (PBR,
+DINO, PSX, MPC, VLO) again — same sector-concentration caveat as the first
+screener applies.
