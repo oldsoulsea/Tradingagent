@@ -30,10 +30,25 @@ require the user to explicitly say so.
 | Avg options volume (30d) | > 5,000/day | liquid enough to trade weeklies with reasonable spreads |
 | Open interest | > 10,000 | liquidity depth |
 | Implied volatility (ATM, 30-day) | > 35% | "high IV" gate |
-| Earnings date | > 14 days out | excludes imminent-earnings names |
+| Earnings date | > 14 days out (fixed date, see below) | excludes imminent-earnings names |
 
 Columns also surfaced (not filtered on): Sector, Historical volatility, P/E,
 Forward P/E, Earnings date — useful context when picking among matches.
+
+### Earnings filter needs manual refreshing
+
+Robinhood's scanner only supports an absolute date for `FILTER_TYPE_EARNINGS_DATE`,
+not a relative "N days from now." So this filter is a **hardcoded cutoff
+date** that drifts stale as time passes — it silently stops excluding
+near-term earnings once "today" catches up to it. This already happened
+once (2026-10-02: the cutoff was still 2026-09-21 from two weeks earlier,
+and 5 tickers with earnings inside the 14-day window — ASML, IBKR, DAL, AA,
+INFY — slipped through before being caught and fixed).
+
+**Before trusting a run's results, check whether the cutoff needs
+bumping.** Current cutoff value: **2026-10-16** (set 2026-10-02, intended
+as "14 days out" at that time). Ask the agent to refresh it to
+today + 14 days whenever you run this scan after a gap.
 
 ## Known limitation: no true IV Rank
 
